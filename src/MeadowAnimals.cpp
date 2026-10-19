@@ -402,6 +402,11 @@ namespace ld
             a.p.InsertScalar(name, 0.0f);
         a.p.InsertScalar(L"Seed", a.seed);
         Keys(a.p, L"Gait", { { 0.0f, 0.0f }, { 1.0f, kTau } }, rig.gait, true);
+        if (a.species == art::Squirrel)
+        {
+            a.p.InsertScalar(L"Gesture", 0.0f);
+            Keys(a.p, L"Gesture", { { 0.0f, 0.0f }, { 1.0f, kTau } }, 3.2f, true);
+        }
         Keys(a.p, L"Blink", { { 0.0f, 0.0f }, { 0.93f, 0.0f }, { 0.96f, 1.0f }, { 0.99f, 0.0f }, { 1.0f, 0.0f } }, 3.5f + 2.5f * ((h >> 3) % 100) / 100.0f, true);
 
         a.root = m_c.CreateContainerVisual();
@@ -423,7 +428,9 @@ namespace ld
         a.pose = m_c.CreateContainerVisual();
         a.jumper.Children().InsertAtTop(a.pose);
 
-        a.bob.StartAnimation(L"Offset", Expr(a, F(L"Vector3(0, -p.Walk*%.3f*Abs(Sin(p.Gait)) - p.Excite*%.3f*Abs(Sin(p.Gait*2)), 0)", rig.bob * U, 0.05f * U).c_str()));
+        // Squirrels already hop for attention; the extra gait-driven excitement bob looks like a tremor.
+        float exciteBob = a.species == art::Squirrel ? 0.0f : 0.05f * U;
+        a.bob.StartAnimation(L"Offset", Expr(a, F(L"Vector3(0, -p.Walk*%.3f*Abs(Sin(p.Gait)) - p.Excite*%.3f*Abs(Sin(p.Gait*2)), 0)", rig.bob * U, exciteBob).c_str()));
         a.pose.StartAnimation(L"Offset", Expr(a, F(L"Vector3(0, p.Lie*%.3f, 0)", rig.legLen * 0.8f * U).c_str()));
         a.pose.StartAnimation(L"Scale", Expr(a, F(L"Vector3(1 + %.3f*p.Walk*Sin(p.Gait), 1 + 0.022*Sin(wind.Phase*50 + p.Seed), 1)", rig.stretch ? 0.07f : 0.0f).c_str()));
         if (rig.waddle)
@@ -490,8 +497,12 @@ namespace ld
                 }
                 else ph = i == 1 ? 3.14159f : 0.0f;
                 std::wstring text = F(L"p.Walk*%.3f*Sin(p.Gait + %.3f)", rig.legAmp, ph);
+                if (a.species == art::Squirrel && front)
+                    text = F(L"p.Walk*%.3f*(1 - p.Carry)*Sin(p.Gait + %.3f) - p.Carry*0.35", rig.legAmp, ph);
                 if (front) text += F(L" + p.Dig*0.5*Sin(p.Gait*3 + %.3f)", ph);
-                if (wave) text += L" - p.Wave*(1.5 + 0.3*Sin(p.Gait*4))";
+                if (wave) text += a.species == art::Squirrel
+                    ? L" - p.Wave*(1.5 + 0.12*Sin(p.Gesture))"
+                    : L" - p.Wave*(1.5 + 0.3*Sin(p.Gait*4))";
                 sprite.StartAnimation(L"RotationAngle", Expr(a, text.c_str()));
                 sprite.StartAnimation(L"Scale", Expr(a, L"Vector3(1, 1 - 0.72*p.Lie, 1)"));
                 break;
@@ -501,7 +512,9 @@ namespace ld
                     rig.earBase + (spec.index ? 0.08f : 0.0f), rig.earFlutter, spec.index * 2, rig.earDroop).c_str()));
                 break;
             case art::PartKind::Tail:
-                sprite.StartAnimation(L"RotationAngle", Expr(a, F(L"%.3f + p.Walk*0.25*Sin(p.Gait*2) + (1 - p.Walk)*0.12*Sin(wind.Phase*40 + p.Seed) + p.Excite*0.3*Sin(p.Gait*4) - p.Lie*0.25", rig.tailBase).c_str()));
+                sprite.StartAnimation(L"RotationAngle", Expr(a, F(a.species == art::Squirrel
+                    ? L"%.3f + (0.04 + p.Walk*0.04 + p.Excite*0.04)*Sin(p.Gesture + p.Seed) - p.Lie*0.25"
+                    : L"%.3f + p.Walk*0.25*Sin(p.Gait*2) + (1 - p.Walk)*0.12*Sin(wind.Phase*40 + p.Seed) + p.Excite*0.3*Sin(p.Gait*4) - p.Lie*0.25", rig.tailBase).c_str()));
                 break;
             case art::PartKind::Wing:
                 sprite.StartAnimation(L"RotationAngle", Expr(a, L"-p.Wave*(0.7 + 0.35*Sin(p.Gait*2)) - p.Excite*0.15*Abs(Sin(p.Gait*3))"));
@@ -1042,7 +1055,10 @@ namespace ld
         loop(L"Graze", { { 0.0f, 0.0f }, { 0.03f, 1.0f }, { 0.18f, 1.0f }, { 0.21f, 0.0f }, { 0.92f, 0.0f }, { 0.95f, 0.6f }, { 1.0f, 0.0f } });
         loop(L"Nibble", { { 0.0f, 0.0f }, { 0.79f, 0.0f }, { 0.81f, 1.0f }, { 0.88f, 1.0f }, { 0.9f, 0.0f }, { 1.0f, 0.0f } });
         bool carries = std::any_of(a.parts.begin(), a.parts.end(), [](auto const& p) { return p.spec.kind == art::PartKind::Carry; });
-        if (carries && (Hash(a.s.id) & 1))
+        if (a.species == art::Squirrel)
+            loop(L"Carry", { { 0.0f, 0.0f }, { 0.2f, 0.0f }, { 0.215f, 1.0f }, { 0.42f, 1.0f }, { 0.435f, 0.0f },
+                { 0.79f, 0.0f }, { 0.81f, 1.0f }, { 0.88f, 1.0f }, { 0.9f, 0.0f }, { 1.0f, 0.0f } });
+        else if (carries && (Hash(a.s.id) & 1))
             loop(L"Carry", { { 0.0f, 0.0f }, { 0.2f, 0.0f }, { 0.215f, 1.0f }, { 0.42f, 1.0f }, { 0.435f, 0.0f }, { 1.0f, 0.0f } });
         bool hopWork = a.species == art::Bunny || a.species == art::Deer || a.species == art::Sheep;
         if (!snail && !hopWork)
@@ -1121,7 +1137,8 @@ namespace ld
         a.jumper.StartAnimation(L"Offset", hop);
 
         float w0 = level == 2 ? 0.6f : 0.45f, w1 = level == 2 ? 0.9f : 0.9f;
-        Keys(a.p, L"Wave", { { 0.0f, 0.0f }, { w0, 0.0f }, { w0 + 0.05f, 1.0f }, { w1 - 0.05f, 1.0f }, { w1, 0.0f }, { 1.0f, 0.0f } }, P, true);
+        float waveRamp = a.species == art::Squirrel ? 0.12f : 0.05f;
+        Keys(a.p, L"Wave", { { 0.0f, 0.0f }, { w0, 0.0f }, { w0 + waveRamp, 1.0f }, { w1 - waveRamp, 1.0f }, { w1, 0.0f }, { 1.0f, 0.0f } }, P, true);
         To(a.p, L"Excite", level == 0 ? 0.35f : (level == 1 ? 0.6f : 0.8f), 0.5f);
         To(a.p, L"Walk", 0.0f, 0.3f);
         a.slotX = a.x;
@@ -1312,7 +1329,9 @@ namespace ld
             float s = ScaleAt(at.y) * (a.isChild ? kChildScale : 1.0f);
             float shift = (cx - host.x) * m_stage.parallax[std::clamp(LayerOf(at.y), 0, 3)] * strength;
             float fx = at.x + shift, fy = Y(at.y, at.x);
-            float halfW = 1.2f * a.rig->rx * s * m_U + Px(4);
+            // Cover the squirrel's full tail sweep on both sides so hover stays stable when it turns.
+            float hitRadius = a.species == art::Squirrel ? 1.15f : 1.2f * a.rig->rx;
+            float halfW = hitRadius * s * m_U + Px(4);
             float top = fy - a.rig->height * 1.05f * s * m_U - (a.mode == Mode::Attention ? 0.45f * m_U * s : 0.0f);
             bool inside = lx >= fx - halfW && lx <= fx + halfW && ly >= top && ly <= fy + 0.1f * m_U * s;
             if (!inside && a.bubble && a.labelSize.x > 0)

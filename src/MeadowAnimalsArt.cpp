@@ -43,7 +43,8 @@ namespace ld::animals
 
     const wchar_t* SpeciesName(int species)
     {
-        static const wchar_t* names[] = { L"bunny", L"fox", L"sheep", L"deer", L"hedgehog", L"duck", L"cat", L"snail", L"dog" };
+        static const wchar_t* names[] = { L"bunny", L"fox", L"sheep", L"deer", L"hedgehog", L"duck", L"cat", L"snail", L"dog", L"squirrel" };
+        static_assert(std::size(names) == SpeciesCount);
         return species >= 0 && species < SpeciesCount ? names[species] : L"?";
     }
 
@@ -161,6 +162,18 @@ namespace ld::animals
                 r.eye = { 0.13f, -0.07f }; r.eyeR = 0.03f; r.mouth = { 0.26f, 0.02f };
                 r.graze = 0.65f; r.gait = 0.6f; r.speed = 2.4f; r.bob = 0.05f; r.legAmp = 0.5f;
             }
+            {
+                Rig& r = rigs[Squirrel];
+                r.height = 1.08f; r.rx = 0.48f; r.body = { -0.015f, -0.27f }; r.bx = 0.25f; r.by = 0.24f;
+                r.legX[0] = 0.015f; r.legX[1] = 0.08f; r.legX[2] = 0.085f; r.legX[3] = 0.13f;
+                r.legLen = 0.09f; r.legW = 0.065f; r.foot = 0.055f;
+                r.neck = { 0.025f, -0.50f };
+                r.ear[0] = { -0.045f, -0.19f }; r.ear[1] = { 0.045f, -0.205f }; r.earLen = 0.12f; r.earW = 0.06f;
+                r.earBase = -0.06f; r.earFlutter = 0.07f; r.earDroop = -0.35f;
+                r.tailAt = { -0.18f, -0.10f }; r.tailBase = 0.06f;
+                r.eye = { 0.095f, -0.152f }; r.eyeR = 0.05f; r.mouth = { 0.25f, 0.015f };
+                r.graze = 0.65f; r.gait = 0.45f; r.speed = 2.9f; r.bob = 0.10f; r.legAmp = 0.55f; r.hopper = true;
+            }
             return rigs;
         }
     }
@@ -176,17 +189,41 @@ namespace ld::animals
         Rig const& r = RigFor(species);
         std::vector<PartSpec> v;
         auto leg = [&](int i) {
+            if (species == Squirrel && (i == 1 || i == 3))
+            {
+                // Forepaws pivot at the shoulders for holding, digging and waving.
+                v.push_back({ PartKind::Leg, i, false, { r.legX[i], i == 1 ? -0.405f : -0.38f }, { -0.06f, -0.06f }, { 0.20f, 0.14f } });
+                return;
+            }
+            if (species == Squirrel)
+            {
+                // Pivot at the haunch baseline so the soles stay aligned when the feet flatten to rest.
+                float soleY = r.body.y + 0.09f + 0.16f;
+                v.push_back({ PartKind::Leg, i, false, { r.legX[i], soleY }, { -0.075f, -0.075f }, { 0.145f, 0.01f } });
+                return;
+            }
             v.push_back({ PartKind::Leg, i, false, { r.legX[i], -r.legLen }, { -r.legW * 0.6f - 0.04f, -r.legW * 0.6f - 0.01f },
                 { r.legW * 0.6f + r.foot + 0.1f, r.legLen + r.legW * 0.7f + 0.02f } });
         };
-        if (r.legs == 4) { leg(0); leg(1); }
+        if (r.legs == 4)
+        {
+            if (species != Squirrel) leg(0);
+            leg(1);
+        }
         if (r.legs == 2) leg(0);
-        if (r.tail) v.push_back({ PartKind::Tail, 0, false, r.tailAt, { -0.62f, -0.6f }, { 0.2f, 0.25f } });
+        if (r.tail) v.push_back({ PartKind::Tail, 0, false, r.tailAt, { species == Squirrel ? -0.80f : -0.62f, species == Squirrel ? -1.0f : -0.6f }, { 0.2f, 0.25f } });
         float2 bmin(r.body.x - r.bx - 0.14f, r.body.y - r.by - 0.32f), bmax(r.body.x + r.bx + 0.16f, 0.06f);
         if (species == Snail) { bmin = { -0.44f, -0.5f }; bmax = { 0.44f, 0.05f }; }
         v.push_back({ PartKind::Body, 0, false, { 0, 0 }, bmin, bmax });
         if (r.wing) v.push_back({ PartKind::Wing, 0, false, { -0.02f, -0.33f }, { -0.3f, -0.16f }, { 0.14f, 0.16f } });
-        if (r.legs == 4) { leg(2); leg(3); }
+        if (species == Squirrel)
+            v.push_back({ PartKind::Carry, 0, false, { 0.30f, -0.39f }, { -0.09f, -0.10f }, { 0.09f, 0.13f } });
+        if (r.legs == 4)
+        {
+            if (species == Squirrel) leg(0);
+            leg(2);
+            if (species != Squirrel) leg(3);
+        }
         if (r.legs == 2) leg(1);
         float hw = std::max(r.earW * 0.7f + 0.05f, 0.09f);
         if (r.ears) v.push_back({ PartKind::Ear, 0, true, r.ear[0], { -hw, -r.earLen - 0.07f }, { hw, 0.05f } });
@@ -202,7 +239,10 @@ namespace ld::animals
             float g = r.eyeR * 2.2f;
             v.push_back({ PartKind::Glint, 0, true, r.eye, { -g, -g }, { g, g }, false });
         }
-        v.push_back({ PartKind::Carry, 0, true, r.mouth, { -0.14f, -0.11f }, { 0.14f, 0.13f } });
+        // Keep the squirrel's near forepaw visible over its cheek when waving.
+        if (species == Squirrel) leg(3);
+        else
+            v.push_back({ PartKind::Carry, 0, true, r.mouth, { -0.14f, -0.11f }, { 0.14f, 0.13f } });
         return v;
     }
 
@@ -260,6 +300,14 @@ namespace ld::animals
                 const uint32_t body[] = { 0xE9A158, 0x8E909A, 0x3E3B3B, 0xF1E3CC };
                 const uint32_t stripe[] = { 0xC97E3C, 0x6C6E78, 0x2C2A2A, 0xD8A266 };
                 return { body[v], 0xFAF5EE, 0x1E1A18, 0xE8999C, stripe[v], body[v], v == 2 ? 0xE2C552u : 0x8DB24Cu };
+            }
+            case Squirrel:
+            {
+                // Red, grey, black and golden coats, each with a pale chest and a fuller tail.
+                const uint32_t body[] = { 0xCD783F, 0x9C9892, 0x4B4341, 0xDCA65F };
+                const uint32_t belly[] = { 0xFFF0D2, 0xF5EEE3, 0xC3B6A2, 0xFFF0D0 };
+                const uint32_t tail[] = { 0xBF6837, 0x9D968E, 0x554945, 0xC58B46 };
+                return { body[v], belly[v], 0x2A211D, 0xE99A87, tail[v], body[v], 0x2F221D };
             }
             case Dog:
             {
@@ -352,6 +400,17 @@ namespace ld::animals
                 sink->Close();
                 return path;
             }
+            com_ptr<ID2D1Geometry> Bezier(float2 start, std::initializer_list<D2D1_BEZIER_SEGMENT> segments)
+            {
+                com_ptr<ID2D1PathGeometry> path;
+                com_ptr<ID2D1GeometrySink> sink;
+                if (FAILED(f->CreatePathGeometry(path.put())) || FAILED(path->Open(sink.put()))) return nullptr;
+                sink->BeginFigure({ start.x, start.y }, D2D1_FIGURE_BEGIN_FILLED);
+                sink->AddBeziers(segments.begin(), static_cast<UINT32>(segments.size()));
+                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                sink->Close();
+                return path;
+            }
             com_ptr<ID2D1Geometry> Poly(std::vector<float2> const& p)
             {
                 com_ptr<ID2D1PathGeometry> path;
@@ -363,15 +422,17 @@ namespace ld::animals
                 sink->Close();
                 return path;
             }
-            com_ptr<ID2D1Geometry> Intersect(ID2D1Geometry* a, ID2D1Geometry* b)
+            com_ptr<ID2D1Geometry> Combine(ID2D1Geometry* a, ID2D1Geometry* b, D2D1_COMBINE_MODE mode)
             {
                 com_ptr<ID2D1PathGeometry> path;
                 com_ptr<ID2D1GeometrySink> sink;
                 if (!a || !b || FAILED(f->CreatePathGeometry(path.put())) || FAILED(path->Open(sink.put()))) return nullptr;
-                a->CombineWithGeometry(b, D2D1_COMBINE_MODE_INTERSECT, nullptr, 0.0015f, sink.get());
+                a->CombineWithGeometry(b, mode, nullptr, 0.0015f, sink.get());
                 sink->Close();
                 return path;
             }
+            com_ptr<ID2D1Geometry> Intersect(ID2D1Geometry* a, ID2D1Geometry* b) { return Combine(a, b, D2D1_COMBINE_MODE_INTERSECT); }
+            com_ptr<ID2D1Geometry> Union(ID2D1Geometry* a, ID2D1Geometry* b) { return Combine(a, b, D2D1_COMBINE_MODE_UNION); }
             void Fill(ID2D1Geometry* g, ID2D1Brush* b) { if (g && b) dc->FillGeometry(g, b); }
             void Fill(com_ptr<ID2D1Geometry> const& g, ID2D1Brush* b) { Fill(g.get(), b); }
             void Stroke(com_ptr<ID2D1Geometry> const& g, ID2D1Brush* b, float w) { if (g && b) dc->DrawGeometry(g.get(), b, w, round.get()); }
@@ -416,6 +477,20 @@ namespace ld::animals
         void DrawLeg(Pen& p, int sp, int v, Pal const& c, Rig const& r, int idx)
         {
             bool back = r.legs == 4 && (idx == 0 || idx == 2);
+            if (sp == Squirrel)
+            {
+                if (back)
+                {
+                    p.Dot({ 0.035f, -0.034f }, 0.10f, 0.034f,
+                        p.Vert(-0.068f, 0.0f, ScaleRgb(c.body, 0.85f), ScaleRgb(c.body, 0.68f)).get());
+                    return;
+                }
+                auto paw = p.Smooth({ { -0.025f, 0.01f }, { 0.005f, -0.025f }, { 0.06f, 0.015f },
+                    { 0.13f, 0.035f }, { 0.16f, 0.06f }, { 0.13f, 0.09f }, { 0.045f, 0.085f }, { -0.015f, 0.045f } }, true);
+                p.Volume(paw, -0.025f, 0.09f, c.body, 0.12f);
+                p.Stroke(p.Smooth({ { 0.12f, 0.065f }, { 0.14f, 0.068f } }, false), p.Solid(c.dark, 0.25f).get(), 0.007f);
+                return;
+            }
             float w = r.legW, len = r.legLen;
             uint32_t top = c.body, bottom = ScaleRgb(c.body, 0.92f), foot = ScaleRgb(c.body, 0.95f);
             switch (sp)
@@ -449,6 +524,19 @@ namespace ld::animals
             float2 b = r.body;
             switch (sp)
             {
+            case Squirrel:
+            {
+                auto main = p.Smooth({ { b.x - 0.21f, b.y + 0.17f }, { b.x - 0.25f, b.y - 0.02f },
+                    { b.x - 0.13f, b.y - 0.22f }, { b.x + 0.02f, b.y - 0.25f }, { b.x + 0.15f, b.y - 0.16f },
+                    { b.x + 0.23f, b.y + 0.04f }, { b.x + 0.18f, b.y + 0.20f }, { b.x + 0.02f, b.y + 0.23f } }, true);
+                auto haunch = p.Ell({ b.x - 0.08f, b.y + 0.09f }, 0.17f, 0.16f);
+                auto body = p.Union(main.get(), haunch.get());
+                p.Volume(body, b.y - r.by, b.y + r.by, c.body);
+                p.Fill(p.Intersect(body.get(), p.Ell({ b.x + 0.12f, b.y + 0.015f }, 0.12f, 0.22f, -12.0f).get()), p.Solid(c.belly).get());
+                p.Stroke(p.Smooth({ { b.x - 0.13f, b.y + 0.01f }, { b.x - 0.05f, b.y + 0.05f }, { b.x - 0.04f, b.y + 0.13f } }, false),
+                    p.Solid(ScaleRgb(c.body, 0.75f), 0.25f).get(), 0.01f);
+                break;
+            }
             case Bunny:
             {
                 auto main = p.Ell(b, r.bx, r.by);
@@ -595,6 +683,27 @@ namespace ld::animals
         {
             switch (sp)
             {
+            case Squirrel:
+            {
+                auto head = p.Bezier({ 0.025f, -0.2493f }, {
+                    { { 0.1241f, -0.2493f }, { 0.2694f, -0.162f }, { 0.2694f, -0.0603f } },
+                    { { 0.2694f, 0.0065f }, { 0.2067f, 0.0631f }, { 0.1355f, 0.094f } },
+                    { { 0.0984f, 0.1101f }, { 0.059f, 0.1193f }, { 0.025f, 0.1193f } },
+                    { { -0.0741f, 0.1193f }, { -0.1546f, 0.0367f }, { -0.1546f, -0.065f } },
+                    { { -0.1546f, -0.1667f }, { -0.0741f, -0.2493f }, { 0.025f, -0.2493f } } });
+                auto muzzle = p.Bezier({ 0.0013f, 0.1177f }, {
+                    { { -0.0123f, 0.0761f }, { -0.0663f, -0.0544f }, { 0.021f, -0.0913f } },
+                    { { 0.071f, -0.1125f }, { 0.232f, -0.0525f }, { 0.2687f, -0.0485f } },
+                    { { 0.2581f, 0.0474f }, { 0.1202f, 0.1193f }, { 0.025f, 0.1193f } },
+                    { { 0.017f, 0.1193f }, { 0.0091f, 0.1187f }, { 0.0013f, 0.1177f } } });
+                p.Volume(head, -0.2493f, 0.1193f, c.body);
+                p.Fill(p.Intersect(head.get(), muzzle.get()), p.Solid(c.belly).get());
+                p.Dot({ 0.26f, -0.048f }, 0.025f, 0.022f, p.Solid(c.dark).get());
+                p.Eye(r.eye, r.eyeR, c.iris, false);
+                p.Stroke(p.Smooth({ { 0.095f, 0.018f }, { 0.155f, 0.048f }, { 0.215f, 0.01f } }, false), p.Solid(c.dark, 0.6f).get(), 0.009f);
+                p.Blush({ 0.045f, -0.035f }, 0.045f, c.accent, 0.65f);
+                break;
+            }
             case Bunny:
             {
                 auto head = p.Ell({ 0.07f, -0.08f }, 0.17f, 0.15f);
@@ -753,6 +862,20 @@ namespace ld::animals
             float L = r.earLen, w = r.earW;
             switch (sp)
             {
+            case Squirrel:
+            {
+                auto ear = p.Smooth({ { -w * 0.7f, 0.01f }, { -w, -L * 0.5f }, { -w * 0.5f, -L * 0.85f },
+                    { 0, -L }, { w * 0.7f, -L * 0.65f }, { w * 0.7f, -L * 0.2f }, { w * 0.5f, 0.01f } }, true);
+                p.Fill(ear, p.Vert(-L, 0.01f, c.extra, c.body).get());
+                p.Dot({ 0, -L * 0.43f }, w * 0.42f, L * 0.3f, p.Solid(c.accent, 0.8f).get());
+                if (v == 0 || v == 3)
+                {
+                    auto tuft = p.Solid(c.extra);
+                    p.Fill(p.Smooth({ { -w * 0.55f, -L * 0.75f }, { -w * 0.25f, -L - 0.02f },
+                        { w * 0.12f, -L * 0.9f }, { w * 0.4f, -L * 0.65f } }, true), tuft.get());
+                }
+                break;
+            }
             case Bunny:
             case Deer:
             {
@@ -820,6 +943,21 @@ namespace ld::animals
         {
             switch (sp)
             {
+            case Squirrel:
+            {
+                // The tail rises from the lower haunch and curls away from the head.
+                auto tail = p.Smooth({ { 0.085f, 0.03f }, { 0.015f, -0.04f }, { -0.055f, -0.18f }, { -0.045f, -0.40f },
+                    { 0.005f, -0.62f }, { -0.02f, -0.78f }, { -0.16f, -0.90f }, { -0.34f, -0.93f },
+                    { -0.53f, -0.88f }, { -0.66f, -0.80f }, { -0.75f, -0.64f }, { -0.67f, -0.49f },
+                    { -0.53f, -0.445f }, { -0.425f, -0.51f }, { -0.445f, -0.60f }, { -0.32f, -0.58f },
+                    { -0.32f, -0.40f }, { -0.30f, -0.20f }, { -0.22f, -0.045f }, { -0.075f, 0.025f } }, true);
+                p.Volume(tail, -0.93f, 0.03f, c.extra, 0.16f);
+                p.Fill(p.Intersect(tail.get(), p.Ell({ -0.16f, -0.57f }, 0.18f, 0.33f, -15.0f).get()),
+                    p.Radial({ -0.12f, -0.64f }, 0.28f, 0.36f, c.belly, 0.3f, c.belly, 0.0f).get());
+                p.Stroke(p.Smooth({ { -0.14f, -0.81f }, { -0.31f, -0.86f }, { -0.50f, -0.82f } }, false),
+                    p.Solid(MixRgb(c.extra, c.belly, 0.35f), 0.5f).get(), 0.018f);
+                break;
+            }
             case Bunny:
             case Sheep:
                 p.Dot({ -0.02f, 0 }, 0.075f, 0.072f, p.Radial({ -0.035f, -0.02f }, 0.09f, 0.09f, MixRgb(sp == Bunny ? c.belly : c.body, 0xFFFFFF, 0.2f), 1,
@@ -864,6 +1002,16 @@ namespace ld::animals
         {
             switch (sp)
             {
+            case Squirrel:
+            {
+                auto nut = p.Smooth({ { -0.058f, -0.01f }, { 0.058f, -0.01f }, { 0.05f, 0.05f },
+                    { 0.0f, 0.095f }, { -0.05f, 0.05f } }, true);
+                p.Volume(nut, -0.01f, 0.095f, 0xBD8546, 0.25f);
+                p.Dot({ 0, -0.012f }, 0.067f, 0.033f, p.Vert(-0.045f, 0.021f, 0x8A6035, 0x614126).get());
+                p.Stroke(p.Smooth({ { 0, -0.04f }, { 0.008f, -0.073f }, { 0.026f, -0.08f } }, false), p.Solid(0x614126).get(), 0.014f);
+                p.Stroke(p.Smooth({ { -0.026f, 0.025f }, { -0.02f, 0.052f } }, false), p.Solid(0xE8BD78, 0.7f).get(), 0.012f);
+                break;
+            }
             case Bunny:
                 p.Stroke(p.Smooth({ { -0.06f, 0.0f }, { -0.11f, -0.05f } }, false), p.Solid(0x6BAA48).get(), 0.018f);
                 p.Stroke(p.Smooth({ { -0.06f, 0.0f }, { -0.11f, 0.03f } }, false), p.Solid(0x5C9A3E).get(), 0.018f);

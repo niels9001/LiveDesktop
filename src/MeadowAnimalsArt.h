@@ -7,7 +7,7 @@ namespace ld::animals
 {
     using winrt::Windows::Foundation::Numerics::float2;
 
-    enum Species { Bunny, Fox, Sheep, Deer, Hedgehog, Duck, Cat, Snail, Dog, SpeciesCount };
+    enum Species { Bunny, Fox, Sheep, Deer, Hedgehog, Duck, Cat, Snail, Dog, Squirrel, SpeciesCount };
     const wchar_t* SpeciesName(int species);
 
     struct Rig

@@ -256,8 +256,8 @@ Each Copilot CLI session becomes a small creature that lives in the landscape an
   Scale and haze key frames sampled from the terrain), never teleports. Animals hop between depth
   layers inserted *between* the hill and grass layers. A foreground animal is partly hidden by the
   front grass blades, and a back-hill animal stands on the far ridge.
-- **Species.** Bunny, fox, sheep, deer, hedgehog, duck, cat, snail and dog (Rottweiler, Golden Doodle,
-  White Doodle), in 3 colour/breed variants each. The
+- **Species.** Bunny, fox, sheep, deer, hedgehog, duck, cat, snail, dog (Rottweiler, Golden Doodle,
+  White Doodle, chocolate Lab) and squirrel (red, grey, black, golden), in 4 colour/breed variants each. The
   species and variant come from a hash of the session id, so an agent keeps its animal across
   restarts. Up to 10 animals are shown; active ones take priority.
 - **Art and rig.** Every species is a multi-part rig (body, head, ears, legs, tail, eyelids, eye glint,
@@ -341,7 +341,7 @@ src/DesktopHost.*       WorkerW / 24H2 discovery, parenting, z-order, bounds
 src/Scene.*             compositor, DesktopWindowTarget, pointer property set, pause/resume
 src/Meadow.cpp          time-of-day landscape: sky, ridges, wind-swept grass, flowers, fireflies
 src/MeadowAnimals.*     Meadow animals: behaviour engine (modes, terrain walks, depth layers, hover/click)
-src/MeadowAnimalsArt.*  procedural species rigs (8 species x 3 colour variants) drawn with Direct2D
+src/MeadowAnimalsArt.*  procedural species rigs (10 species x 4 colour variants) drawn with Direct2D
 src/SessionsProvider.*  reads ~\.copilot\session-state, status + parent/child inference, mock data
 src/Snapshot.*          offscreen capture of the scene visual to PNG (Windows.Graphics.Capture + WIC)
 src/Reveal.*            WinEvent-based "desktop revealed" / "fully occluded" detection
